@@ -12,7 +12,7 @@ def findSubcellWords(str_input):
         single_str = single_str.strip().capitalize()
         if single_str:
             result.append(single_str)
-    print(result)
+    # print(result)
     return result
 
 
@@ -52,7 +52,14 @@ def read_uniprotkb(path):
             data['subcell'] = findSubcellWords(linelist[subcellIndex])
             data['domain'] = linelist[domainIndex][:-1].split(';')
             res[linelist[enterIndex]] = data
-            pass
+    return res
+
+
+def compute_edge_feats(edges, nodedatas):
+    pass
+
+
+def compute_node_feats(nodes, nodedatas):
     pass
 
 
@@ -62,5 +69,8 @@ if __name__ == "__main__":
     save(nodes, r'D:\code\gao_complex\Data\Yeast\embedding\uniprotkb_ids')
     uniprotkb_path = r'D:\code\gao_complex\Data\Yeast\embedding\uniprot-yourlist_M20201020A94466D2655679D1FD8953E075198DA80588E6L.tab'
     uniprotkb_datas = read_uniprotkb(uniprotkb_path)
+
+    compute_edge_feats(edges, uniprotkb_datas)
+    compute_node_feats(nodes, uniprotkb_datas)
 
     processed_embed = r'D:\code\gao_complex\Data\Yeast\embedding\embed'

@@ -7,3 +7,4 @@ go整体网络的下载：
     最后形成一个go-basic.obo的文件，里面描述了所有go的从属关系，是一个有向无环图
 obo文件的解析：
     需要使用到goatools包，conda install goatools
+    部分教程：https://blog.csdn.net/weixin_43306331/article/details/84590283
