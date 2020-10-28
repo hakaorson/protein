@@ -144,13 +144,23 @@ def compute_edge_feat_subcell(mapping, v0_subcellls, v1_subcells):
 
 class go_compute():
     def __init__(self, path):
-        self.graph = obo_parser.GODag(path)
+        self.graph = obo_parser.GODag(path, optional_attrs="relationship")
+        self.computed_SV = {}
 
     def findDirectParent(self, go_name):
         pass
 
+    def compute_sv(self, go):
+        if go in self.computed_SV:
+            return self.computed_SV[go]
+        if go not in self.graph.keys():
+            return 0
+        root = self.graph.query_term(go)
+        
+
     def computeWangSim(self, v0_go, v1_go):
-        temp=self.graph.paths_to_top(v0_go)
+        v0_SV = self.compute_sv(v0_go)
+        v1_SV = self.compute_sv(v1_go)
         pass
 
     def compute_edge_feat_go(self, v0_gos, v1_gos):
