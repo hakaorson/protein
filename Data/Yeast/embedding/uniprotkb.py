@@ -155,8 +155,10 @@ class go_compute():
             return self.computed_SV[go]
         if go not in self.graph.keys():
             return 0
-        root = self.graph.query_term(go)
-        
+        begin = self.graph.query_term(go)
+        cur_level = begin.level
+        levels = [[] for i in range(cur_level)]
+        levels.append([begin])
 
     def computeWangSim(self, v0_go, v1_go):
         v0_SV = self.compute_sv(v0_go)
