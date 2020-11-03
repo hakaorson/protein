@@ -20,5 +20,5 @@ def save(datas, path):
 
 if __name__ == "__main__":
     node_path = "embedding/dip_node"
-    edge_path="embedding/dip_edge"
-    bench_path=
+    edge_path = "embedding/dip_edge"
+    bench_path = "bench/CYC2008"
