@@ -18,3 +18,5 @@ subcell定位 Subcellular location [CC]
         示例：PF01798;PF08156;
     Cross-reference (InterPro)
         示例：IPR029012;IPR012974;IPR042239;IPR002687;IPR036070;IPR012976;
+
+所有的编码数据都是根据特定的蛋白质网络计算过来的

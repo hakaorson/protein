@@ -1,4 +1,6 @@
 import pandas as pd
+import math
+import sys
 import re
 import networkx as nx
 import os
@@ -146,38 +148,181 @@ class go_compute():
     def __init__(self, path):
         self.graph = obo_parser.GODag(path, optional_attrs="relationship")
         self.computed_SV = {}
+        self.lin_static = {}
 
-    def findDirectParent(self, go_name):
-        pass
+    def findDirectParent(self, go_term):
+        is_a_parents = list(go_term.parents)
+        part_of_parents = list(
+            go_term.relationship['part_of']) if 'part_of' in go_term.relationship.keys() else []
+        return is_a_parents, part_of_parents
+
+    def extract_graph(self, go_term):
+        '''
+        从go注释网络里面提取局部网络
+        '''
+        nodes = set([go_term.id])
+        edges = dict()
+        visited = set()
+        que = queue.Queue()
+        que.put(go_term)
+        while not que.empty():
+            cur_node = que.get()
+            if cur_node in visited:
+                continue
+            visited.add(cur_node)
+            is_a_parents, part_of_parents = self.findDirectParent(cur_node)
+            for part_of_p in part_of_parents:
+                que.put(part_of_p)
+                edges[(cur_node.id, part_of_p.id)] = 0.6
+                nodes.add(part_of_p.id)
+            for is_a_p in is_a_parents:
+                que.put(is_a_p)
+                edges[(cur_node.id, is_a_p.id)] = 0.8
+                nodes.add(is_a_p.id)
+        nodemap = {}
+        for index, node in enumerate(nodes):
+            nodemap[node] = index
+        matrix = [[0 for j in range(len(nodemap))]
+                  for i in range(len(nodemap))]
+        for edge in edges.keys():
+            v0, v1 = nodemap[edge[0]], nodemap[edge[1]]
+            matrix[v0][v1] = edges[edge]
+        res_nodes = list(nodes)
+        res_edges = [[edge[0], edge[1], edges[edge]] for edge in edges]
+        return res_nodes, res_edges
 
     def compute_sv(self, go):
         if go in self.computed_SV:
             return self.computed_SV[go]
         if go not in self.graph.keys():
-            return 0
+            return {}
         begin = self.graph.query_term(go)
-        cur_level = begin.level
-        levels = [[] for i in range(cur_level)]
-        levels.append([begin])
+        nodes, edges = self.extract_graph(begin)
+        # 为拓扑排序汇集所有的边信息和节点信息
+        edge_in_num = {}
+        edges_sum = {}
+        node_res = {}
+        for node in nodes:
+            node_res[node] = 0.0
+            edge_in_num[node] = 0
+        node_res[begin.id] = 1.0
+        for v0, v1, w in edges:
+            edge_in_num[v1] += 1
+            if v0 in edges_sum.keys():
+                edges_sum[v0].append([v1, w])
+            else:
+                edges_sum[v0] = [[v1, w]]
+        que = queue.Queue()
+        que.put(begin.id)
+        # 执行拓扑排序算法
+        while not que.empty():
+            cur = que.get()
+            if cur in edges_sum.keys():
+                for parent, w in edges_sum[cur]:
+                    edge_in_num[parent] -= 1
+                    node_res[parent] = max(node_res[parent], node_res[cur]*w)
+                    if edge_in_num[parent] == 0:
+                        que.put(parent)
+        self.computed_SV[go] = node_res
+        return node_res
 
     def computeWangSim(self, v0_go, v1_go):
         v0_SV = self.compute_sv(v0_go)
         v1_SV = self.compute_sv(v1_go)
-        pass
+        sum_v0, sum_v1, sum_com = 0, 0, 0
+        commons = v0_SV.keys() & v1_SV.keys()
+        if len(commons) == 0:
+            return 0
+        for com in commons:
+            sum_com += v0_SV[com]
+            sum_com += v1_SV[com]
+        for v0 in v0_SV.keys():
+            sum_v0 += v0_SV[v0]
+        for v1 in v1_SV.keys():
+            sum_v1 += v1_SV[v1]
+        return sum_com/(sum_v0+sum_v1)
+
+    def static_allgo_info(self, go_info):
+        for go in go_info:
+            if go in self.lin_static.keys():
+                self.lin_static[go] += 1
+            else:
+                self.lin_static[go] = 1
+
+    def computeLinSim(self, v0_gos, v1_gos):
+        v0_parents, v1_parents = set(), set()
+        for v0_go in v0_gos:
+            v0_query = self.graph.query_term(v0_go)
+            if v0_query:
+                v0_parents = v0_parents | set(v0_query.parents)
+        for v1_go in v1_gos:
+            v1_query = self.graph.query_term(v1_go)
+            if v1_query:
+                v1_parents = v1_parents | set(v1_query.parents)
+        common_parents = v0_parents & v1_parents & self.lin_static.keys()  # TODO 只统计了当前的蛋白质特征
+        min_common = sys.maxsize
+        max_v0, max_v1 = 0, 0
+        for cpa in common_parents:
+            min_common = min(min_common, self.lin_static[cpa])
+        for v0_go in v0_gos:
+            max_v0 = max(max_v0, self.lin_static[v0_go])
+        for v1_go in v1_gos:
+            max_v1 = max(max_v1, self.lin_static[v1_go])
+        if max_v0 == 0 or max_v1 == 0 or min_common == sys.maxsize:
+            return 0
+        return 2*math.log(1/min_common)/(math.log(1/max_v0)+math.log(1/max_v1))
 
     def compute_edge_feat_go(self, v0_gos, v1_gos):
         '''
         计算go相似性
         '''
-        for v0_go in v0_gos:
-            for v1_go in v1_gos:
-                self.computeWangSim(v0_go, v1_go)
+        res = []
+        '''
+        wang相似性，取自徐斌师兄的论文
+        两个蛋白质拆尊尊自己的go注释
+        计算其中任意两个之间的go相似性
+        
+        使用go图可以提取go的关系，其中parent是直接关系（表示is_a），而在relationship中的part_of关键字表示的是part_of的关系
+        具体的计算过程可以从论文中得出
+        '''
+        matrix = [[0 for j in range(len(v1_gos)+1)]
+                  for i in range(len(v0_gos)+1)]
+        for v0_index, v0_go in enumerate(v0_gos):
+            for v1_index, v1_go in enumerate(v1_gos):
+                matrix[v0_index][v1_index] = self.computeWangSim(v0_go, v1_go)
+                matrix[v0_index][-1] = max(matrix[v0_index]
+                                           [-1], matrix[v0_index][v1_index])
+                matrix[-1][v1_index] = max(matrix[-1]
+                                           [v1_index], matrix[v0_index][v1_index])
+        temp_sum = 0
+        for i in range(len(v0_gos)):
+            temp_sum += matrix[i][-1]
+        for j in range(len(v1_gos)):
+            temp_sum += matrix[-1][j]
+        temp_sum = temp_sum/(len(v0_gos)+len(v1_gos)
+                             ) if len(v0_gos) or len(v1_gos) else 0
+        res.append(temp_sum)
+        '''
+        lin相似性，取自徐斌论文第五章
+        注意计算中所有的蛋白质只是网络里面涉及到的蛋白质
+        '''
+        res.append(self.computeLinSim(v0_gos, v1_gos))
+        '''
+        其他特征
+        '''
+        common_go_nums = len(set(v0_gos) & set(v1_gos))
+        all_go_nums = len(set(v0_gos) | set(v1_gos))
+        res.append(common_go_nums)
+        res.append(all_go_nums)
+        return res
 
 
 def compute_edge_feats(edges, nodedatas):
     domain_net = read_graph("domain/domain_graph")
     subcell_map = read_mapping("subcell/mapping")
     go_computor = go_compute("go/go-basic.obo")
+    for node in nodedatas.keys():
+        go_computor.static_allgo_info(nodedatas[node]['go'])
     res = {}
     for edge in edges:
         v0, v1 = edge
@@ -189,7 +334,7 @@ def compute_edge_feats(edges, nodedatas):
         tempEmb['go'] = go_computor.compute_edge_feat_go(
             nodedatas[v0]['go'], nodedatas[v1]['go'])
         res[edge] = tempEmb
-    pass
+    return res
 
 
 # 计算blast
@@ -207,7 +352,7 @@ def compute_node_feats(nodes, nodedatas):
         tempEmb = {}
         tempEmb['blast'] = compute_node_feat_blast(blast_map, node)
         res[node] = tempEmb
-    pass
+    return res
 
 
 if __name__ == "__main__":
@@ -217,5 +362,28 @@ if __name__ == "__main__":
     uniprotkb_path = 'uniprotkb_datas'
     uniprotkb_datas = read_uniprotkb(uniprotkb_path)
 
-    compute_edge_feats(edges, uniprotkb_datas)
-    compute_node_feats(nodes, uniprotkb_datas)
+    edge_feats = compute_edge_feats(edges, uniprotkb_datas)
+    node_feats = compute_node_feats(nodes, uniprotkb_datas)
+
+    dip_node_path = 'dip_node'
+    dip_edge_path = 'dip_edge'
+    with open(dip_edge_path, 'w') as f:
+        for edge in edge_feats.keys():
+            datas = []
+            dict_datas = edge_feats[edge]
+            for key in dict_datas.keys():
+                datas.extend(dict_datas[key])
+            datas = list(map(float, datas))
+            short_datas = list(map(lambda num: "{:.2f}".format(num), datas))
+            strings = edge[0]+'\t' + edge[1]+'\t'+'\t'.join(short_datas)+'\n'
+            f.write(strings)
+    with open(dip_node_path, 'w') as f:
+        for node in node_feats.keys():
+            datas = []
+            dict_datas = node_feats[node]
+            for key in dict_datas.keys():
+                datas.extend(dict_datas[key])
+            datas = list(map(float, datas))
+            short_datas = list(map(lambda num: "{:.2f}".format(num), datas))
+            strings = node+'\t'+'\t'.join(short_datas)+'\n'
+            f.write(strings)
