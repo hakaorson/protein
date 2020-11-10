@@ -259,7 +259,9 @@ class go_compute():
             v1_query = self.graph.query_term(v1_go)
             if v1_query:
                 v1_parents = v1_parents | set(v1_query.parents)
-        common_parents = v0_parents & v1_parents & self.lin_static.keys()  # TODO 只统计了当前的蛋白质特征
+        common_parents = v0_parents & v1_parents & self.lin_static.keys()
+        # TODO 只统计了当前的蛋白质特征，没有每一个go注释在所有蛋白质中出现概率的数据
+        # 注意一个蛋白质的go注释一坑的包含他所有的父节点
         min_common = sys.maxsize
         max_v0, max_v1 = 0, 0
         for cpa in common_parents:
@@ -308,6 +310,9 @@ class go_compute():
         '''
         res.append(self.computeLinSim(v0_gos, v1_gos))
         '''
+        论文Predicting protein complex in protein interaction network - a supervised learning based method提供了一种go特征的计算方法
+        '''
+        '''
         其他特征
         '''
         common_go_nums = len(set(v0_gos) & set(v1_gos))
@@ -333,6 +338,7 @@ def compute_edge_feats(edges, nodedatas):
             subcell_map, nodedatas[v0]['subcell'], nodedatas[v1]['subcell'])
         tempEmb['go'] = go_computor.compute_edge_feat_go(
             nodedatas[v0]['go'], nodedatas[v1]['go'])
+        # TODO graph特征，共同一阶邻居
         res[edge] = tempEmb
     return res
 
@@ -367,7 +373,8 @@ if __name__ == "__main__":
 
     dip_node_path = 'dip_node'
     dip_edge_path = 'dip_edge'
-    with open(dip_edge_path, 'w') as f:
+    dip_edge_path_nofeat = 'dip_edge_nofeat'
+    with open(dip_edge_path, 'w') as f, open(dip_edge_path_nofeat, 'w')as fnofeat:
         for edge in edge_feats.keys():
             datas = []
             dict_datas = edge_feats[edge]
@@ -377,6 +384,7 @@ if __name__ == "__main__":
             short_datas = list(map(lambda num: "{:.2f}".format(num), datas))
             strings = edge[0]+'\t' + edge[1]+'\t'+'\t'.join(short_datas)+'\n'
             f.write(strings)
+            fnofeat.write(edge[0]+' ' + edge[1]+'\n')
     with open(dip_node_path, 'w') as f:
         for node in node_feats.keys():
             datas = []

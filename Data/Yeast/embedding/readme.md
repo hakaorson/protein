@@ -20,3 +20,7 @@ subcell定位 Subcellular location [CC]
         示例：IPR029012;IPR012974;IPR042239;IPR002687;IPR036070;IPR012976;
 
 所有的编码数据都是根据特定的蛋白质网络计算过来的
+
+技巧
+    在uniprot中可以下载到所有的蛋白质，操作是在advanced搜索里面做空白搜索即可（一共56万个）
+    在download的时候下载map，可以只下载id map数据
