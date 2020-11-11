@@ -2,11 +2,12 @@
 # # python D:\code\gao_complex\GraphCut\other_methods\coach.py D:\code\gao_complex\Data\dip2.str.tab
 # result = process.main_process('Data/CYC2008_408', 'Data/cut/dip2_coach')
 # pass
-from Data import base_data
+from Data import data
 from Model import graph_classify
 import torch
+import pickle
 
-datas = base_data.main(recompute=False)
+datas = data.load_pickle('Data\Yeast\data')
 model = graph_classify.SimpleModel(
     graphfeat_size=1, basefeat_size=10, hidden_size=16, gcn_layers=4, classnum=3)
 
