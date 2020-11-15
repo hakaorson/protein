@@ -7,7 +7,9 @@ from Model import graph_classify
 import torch
 import pickle
 
-datas = data.load_pickle('Data\Yeast\data')
+datas = data.main(reload=False)
+nodefeatsize=420
+edge
 model = graph_classify.SimpleModel(
     graphfeat_size=1, basefeat_size=10, hidden_size=16, gcn_layers=4, classnum=3)
 

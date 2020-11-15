@@ -131,18 +131,16 @@ class single_data:
         return list(result)
 
 
-def load_pickle(path):
-    with open(path, 'rb')as f:
-        result = pickle.load(f)
-    return result
-
-
-if __name__ == "__main__":
-    node_path = "Yeast/embedding/dip_node"
-    edge_path = "Yeast/embedding/dip_edge"
-    postive_path = "Yeast/bench/CYC2008"
-    middle_path = "Yeast/bench/dip_coach"
-    save_path = "Yeast/data"
+def main(reload=False):
+    node_path = "Data/Yeast/embedding/dip_node"
+    edge_path = "Data/Yeast/embedding/dip_edge"
+    postive_path = "Data/Yeast/bench/CYC2008"
+    middle_path = "Data/Yeast/bench/dip_coach"
+    save_path = "Data/Yeast/data"
+    if not reload:
+        with open(save_path, 'rb')as f:
+            result = pickle.load(f)
+        return result
     graph = read_graph(node_path, edge_path)
     get_single_random_graph_nodes(graph, 5)
     bench_data = read_bench(postive_path)
@@ -176,4 +174,8 @@ if __name__ == "__main__":
 
     with open(save_path, 'wb') as f:
         pickle.dump(datasets, f)
+    return datasets
+
+
+if __name__ == "__main__":
     pass
