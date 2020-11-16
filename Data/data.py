@@ -5,25 +5,43 @@ import dgl
 import torch
 import pickle
 import numpy as np
+from sklearn import preprocessing
 
 
 def read_graph(node_path, edge_path):
-    res = nx.Graph()
-    nodes, nodedatas = [], []
-    edges, edgedatas = [], []
+    nodes, nodematrix = [], []
+    edges, edgematrix = [], []
 
     with open(node_path, 'r') as f:
         for nodedata in f:
             nodedata_splited = nodedata.split('\t')
             node_id = nodedata_splited[0]
             node_feat = list(map(float, nodedata_splited[1:]))
-            res.add_node(node_id, w=node_feat)
+            nodes.append(node_id)
+            nodematrix.append(node_feat)
+
     with open(edge_path, 'r')as f:
         for edgedata in f:
             edgedata_splited = edgedata.split('\t')
             v0, v1 = edgedata_splited[:2]
             edge_feat = list(map(float, edgedata_splited[2:]))
-            res.add_edge(v0, v1, w=edge_feat)
+            edges.append([v0, v1])
+            edgematrix.append(edge_feat)
+    return nodes, nodematrix, edges, edgematrix
+
+
+def dataprocess(matrix):
+    matrix = np.array(matrix)
+    matrix = preprocessing.normalize(matrix, axis=0)
+    return matrix
+
+
+def get_graph(nodes, nodematrix, edges, edgematrix):
+    res = nx.Graph()
+    for index, item in enumerate(nodematrix):
+        res.add_node(nodes[index], w=item)
+    for index, item in enumerate(edgematrix):
+        res.add_edge(edges[index][0], edges[index][1], w=item)
     return res
 
 
@@ -154,7 +172,11 @@ def main(reload=False):
         with open(save_path, 'rb')as f:
             result = pickle.load(f)
         return result
-    graph = read_graph(node_path, edge_path)
+    nodes, nodematrix, edges, edgematrix = read_graph(node_path, edge_path)
+    nodematrix = dataprocess(nodematrix)
+    edgematrix = dataprocess(edgematrix)
+    graph = get_graph(nodes, nodematrix, edges, edgematrix)
+
     get_single_random_graph_nodes(graph, 5)
     bench_data = read_bench(postive_path)
     middle_data = read_bench(middle_path)

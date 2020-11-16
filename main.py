@@ -7,7 +7,7 @@ from Model import graph_classify
 import torch
 import pickle
 
-datas = data.main(reload=False)
+datas = data.main(reload=True)
 nodefeatsize = 420
 edgefeatsize = 10
 graphfeatsize = 10
