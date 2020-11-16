@@ -9,6 +9,9 @@ import numpy as np
 
 def read_graph(node_path, edge_path):
     res = nx.Graph()
+    nodes, nodedatas = [], []
+    edges, edgedatas = [], []
+
     with open(node_path, 'r') as f:
         for nodedata in f:
             nodedata_splited = nodedata.split('\t')
@@ -78,12 +81,18 @@ def remove_small_graph(datas, cut_num):
     return res
 
 
-def remove_notingraph(datas, graph):
+def remove_fake_graph(datas, graph):
     res = set()
     nodes = set(graph.nodes)
     for data in datas:
-        if len(set(data)-nodes) == 0:
-            res.add(data)
+        if len(set(data)-nodes) != 0:
+            continue
+        subgraph = graph.subgraph(data)
+        sub_compos = nx.connected_components(subgraph)
+        bigest_graph = next(sub_compos)
+        if len(bigest_graph) != len(subgraph.nodes):
+            continue
+        res.add(data)
     return res
 
 
@@ -91,7 +100,8 @@ class single_data:
     def __init__(self, graph, label):
         self.label = label
         self.graph = self.dgl_graph(graph)
-        self.feat = self.get_default_feature(graph)
+        self.feat = torch.tensor(self.get_default_feature(
+            graph), dtype=torch.float32).reshape(1, -1)
 
     def dgl_graph(self, graph: nx.Graph):
         res = dgl.DGLGraph()
@@ -99,11 +109,14 @@ class single_data:
         for node in nodes:
             data = torch.tensor(
                 graph.nodes[node]['w'], dtype=torch.float32).reshape(1, -1)
-            res.add_nodes(1, {'feat': data})
+            deg = torch.tensor(graph.degree(
+                node), dtype=torch.float32).reshape(1, -1)
+            res.add_nodes(1, {'feat': data, 'degree': deg})
         for v0, v1 in graph.edges:
             data = torch.tensor(
                 graph[v0][v1]['w'], dtype=torch.float32).reshape(1, -1)
             res.add_edge(nodes.index(v0), nodes.index(v1), {'feat': data})
+            res.add_edge(nodes.index(v1), nodes.index(v0), {'feat': data})
         return res
 
     def get_default_feature(self, graph: nx.Graph):
@@ -116,7 +129,7 @@ class single_data:
         clusters = np.array([clusters[item] for item in clusters.keys()])
         # topologic = nx.topological_sort(graph)
         correlation = nx.degree_pearson_correlation_coefficient(
-            graph) if max(degrees) else 0
+            graph)
 
         result.append(degrees.mean())
         result.append(degrees.max())
@@ -149,17 +162,19 @@ def main(reload=False):
     bench_data_remove_small = remove_small_graph(bench_data, 3)  # 236个
     middle_data_remove_small = remove_small_graph(middle_data, 3)  # 883
 
-    bench_data_remove_notin_graph = remove_notingraph(
-        bench_data_remove_small, graph)  # 198个
+    bench_data_remove_fake_graph = remove_fake_graph(
+        bench_data_remove_small, graph)  # 142 注意有一些子图不是全连通的，需要去除
+    middle_data_remove_fake_graph = remove_fake_graph(
+        middle_data_remove_small, graph)  # 882
 
     random_data_size_list = [len(item) for item in (
-        middle_data_remove_small | bench_data_remove_notin_graph)]
+        bench_data_remove_fake_graph | middle_data_remove_fake_graph)]
     random_target = 1000
     random_data = get_random_graphs(
         graph, random_data_size_list, random_target)
     statics_nodes = {
-        'pos': bench_data_remove_notin_graph,
-        'mid': middle_data_remove_small,
+        'pos': bench_data_remove_fake_graph,
+        'mid': middle_data_remove_fake_graph,
         'neg': random_data
     }
     dgl_graphs = {
@@ -175,6 +190,26 @@ def main(reload=False):
     with open(save_path, 'wb') as f:
         pickle.dump(datasets, f)
     return datasets
+
+
+class BatchGenerator():
+    def __init__(self, data, batch_size):
+        self.data = data
+        random.shuffle(self.data)
+        self.batch_size = batch_size if batch_size != -1 else len(self.data)
+        self.index = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            self.data[self.index+self.batch_size-1]  # 用于检查是否越界
+            b_data = self.data[self.index:self.index+self.batch_size]
+        except IndexError:
+            raise StopIteration()
+        self.index += self.batch_size
+        return b_data
 
 
 if __name__ == "__main__":

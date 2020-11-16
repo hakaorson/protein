@@ -8,29 +8,38 @@ import torch
 import pickle
 
 datas = data.main(reload=False)
-nodefeatsize=420
-edge
+nodefeatsize = 420
+edgefeatsize = 10
+graphfeatsize = 10
+batchsize = 20
 model = graph_classify.SimpleModel(
-    graphfeat_size=1, basefeat_size=10, hidden_size=16, gcn_layers=4, classnum=3)
+    nodefeatsize=nodefeatsize,
+    edgefeatsize=edgefeatsize,
+    graphfeatsize=graphfeatsize,
 
-cross_loss = torch.nn.CrossEntropyLoss()
+    hidden_size=16,
+    gcn_layers=2,
+    classnum=3
+)
+
+cross_loss = torch.nn.CrossEntropyLoss(weight=torch.FloatTensor([10, 1, 1]))
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 for i in range(10000):
     epoch_loss = 0
-    data_gener = base_data.BatchGenerator(datas, 5)
+    data_gener = data.BatchGenerator(datas, batchsize)
     for batch_data in data_gener:
         batch_loss = 0
-        for data in batch_data:
-            predict = model(data.dgl_graph, data.base_feature)
+        for item in batch_data:
             primary_node_target = torch.tensor(
-                data.label, dtype=torch.long).reshape(-1)
+                item.label, dtype=torch.long).reshape(-1)
+            predict = model(item.graph, item.feat)
+
             loss = cross_loss(predict, primary_node_target)
             batch_loss += loss
             epoch_loss += loss
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+        optimizer.zero_grad()
+        batch_loss.backward()
+        optimizer.step()
         # print('batch loss:', batch_loss.detach().numpy())
     print('epoch loss:', epoch_loss.detach().numpy())
 pass
