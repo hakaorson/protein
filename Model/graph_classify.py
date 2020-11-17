@@ -1,6 +1,37 @@
 from torch import nn
 import torch
 import dgl
+from dgl.nn.pytorch import GraphConv
+import torch.nn.functional as F
+
+
+class Classifier(nn.Module):
+    def __init__(self, in_dim, hidden_dim, n_classes):
+        '''
+        定义图神经分类模型的结构
+        :param in_dim: 输入的特征维数， 与forward中的第一层的输入特征数相对应
+        :param hidden_dim: 隐藏层单元数
+        :param n_classes: 分类数
+        '''
+        super(Classifier, self).__init__()
+        self.conv1 = GraphConv(in_dim, hidden_dim, allow_zero_in_degree=True)
+        self.conv2 = GraphConv(hidden_dim, hidden_dim, allow_zero_in_degree=True)
+        self.classify = nn.Linear(hidden_dim, n_classes)
+
+    def forward(self, g):
+        '''
+        向前传播
+        :param g: 图
+        :return:
+        '''
+        h = g.in_degrees().view(-1, 1).float()  # 使用节点的度作为节点初始特征， 对于无向图来说，输入度等于输出度
+        # 卷积层以及激活函数
+        h = F.relu(self.conv1(g, h))
+        h = F.relu(self.conv2(g, h))
+        g.ndata['feat'] = h
+        # 以平均值来代表图
+        hg = dgl.mean_nodes(g, 'feat')
+        return self.classify(hg)
 
 
 class DGLInit(nn.Module):
@@ -79,12 +110,12 @@ class Predictwithbase(nn.Module):
     def __init__(self, in_size, out_size):
         super().__init__()
         self.predict = nn.Linear(in_size, out_size)
-        self.soft = nn.Softmax(-1)
+        # self.soft = nn.Softmax(-1)
 
     def forward(self, dgl_feat, base_feat):
         final_feat = torch.cat([dgl_feat, base_feat], -1)
         result = self.predict(final_feat)
-        result = self.soft(result)
+        # result = self.soft(result)
         return result
 
 
@@ -92,11 +123,23 @@ class Predictnobase(nn.Module):
     def __init__(self, in_size, out_size):
         super().__init__()
         self.predict = nn.Linear(in_size, out_size)
-        self.soft = nn.Softmax(-1)
+        # self.soft = nn.Softmax(-1)
 
     def forward(self, dgl_feat):
         result = self.predict(dgl_feat)
-        result = self.soft(result)
+        # result = self.soft(result)
+        return result
+
+
+class PredictOnlyBase(nn.Module):
+    def __init__(self, in_size, out_size):
+        super().__init__()
+        self.predict = nn.Linear(in_size, out_size)
+        # self.soft = nn.Softmax(-1)
+
+    def forward(self, base_feat):
+        result = self.predict(base_feat)
+        # result = self.soft(result)
         return result
 
 
@@ -134,6 +177,7 @@ class SimpleModel(nn.Module):
         self.gcn_predict = GCNPredict()
         self.predictwithbase = Predictwithbase(hidden_size*2, classnum)
         self.predictnobase = Predictnobase(hidden_size, classnum)
+        self.predictonlybase = PredictOnlyBase(hidden_size, classnum)
         self.edge2node_feat = Node_feat_fusion()
 
     def forward(self, dgl_data, base_data):
@@ -148,7 +192,8 @@ class SimpleModel(nn.Module):
         nodedata_aftergcn = dgl_digit.ndata['hidden']
         dgl_feat = self.gcn_predict(dgl_digit)
         # predict = self.predictwithbase(dgl_feat, base_feat)
-        predict = self.predictnobase(dgl_feat)
+        predict = self.predictonlybase(base_feat)
+        # predict = self.predictnobase(dgl_feat)
         return predict
 
 

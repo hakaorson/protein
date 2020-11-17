@@ -4,8 +4,10 @@ import networkx as nx
 import dgl
 import torch
 import pickle
+import os
 import numpy as np
 from sklearn import preprocessing
+from matplotlib import pyplot as plt
 
 
 def read_graph(node_path, edge_path):
@@ -58,7 +60,7 @@ def get_random_graphs(graph, l_list, target):
     return result
 
 
-def get_single_random_graph_nodes(graph, size):
+def get_single_random_graph_nodes(graph, size):  # 这种随机化结果产生的区分度过强，看有没有其他随机的方案
     beginer = random.choice(list(graph.nodes.keys()))
     node_set = set([beginer])
     neighbor_sets = set(graph.neighbors(beginer))
@@ -106,12 +108,39 @@ def remove_fake_graph(datas, graph):
         if len(set(data)-nodes) != 0:
             continue
         subgraph = graph.subgraph(data)
+        '''
+        #如果具有多余一个连通子图，则跳过
         sub_compos = nx.connected_components(subgraph)
         bigest_graph = next(sub_compos)
         if len(bigest_graph) != len(subgraph.nodes):
             continue
+        '''
+        '''
+        # 如果具有一个点的邻居数为0，则跳过
+        miniest = 1
+        for node in subgraph.nodes:
+            miniest = min(miniest, nx.degree(subgraph, node))
+        if miniest == 0:
+            continue
+        '''
+
+        # 只有一个图有多个部分组成，而且最大的部分小于原来的80%的时候才跳过
+        sub_compos = nx.connected_components(subgraph)
+        bigest_graph = next(sub_compos)
+        if len(bigest_graph) < int(len(subgraph.nodes)*0.70):
+            continue
+
         res.add(data)
     return res
+
+
+def showsubgraphs(graph, nodelists, path):
+    os.makedirs(path, exist_ok=True)
+    for index, nodes in enumerate(nodelists):
+        subgraph = nx.subgraph(graph, nodes)
+        nx.draw(subgraph)
+        plt.savefig(path+"/{}".format(index))
+        plt.close()
 
 
 class single_data:
@@ -124,12 +153,13 @@ class single_data:
     def dgl_graph(self, graph: nx.Graph):
         res = dgl.DGLGraph()
         nodes = list(graph.nodes)
-        for node in nodes:
+        for index, node in enumerate(nodes):
             data = torch.tensor(
                 graph.nodes[node]['w'], dtype=torch.float32).reshape(1, -1)
             deg = torch.tensor(graph.degree(
                 node), dtype=torch.float32).reshape(1, -1)
             res.add_nodes(1, {'feat': data, 'degree': deg})
+            # res.add_edge(index, index)
         for v0, v1 in graph.edges:
             data = torch.tensor(
                 graph[v0][v1]['w'], dtype=torch.float32).reshape(1, -1)
@@ -185,13 +215,17 @@ def main(reload=False):
     middle_data_remove_small = remove_small_graph(middle_data, 3)  # 883
 
     bench_data_remove_fake_graph = remove_fake_graph(
-        bench_data_remove_small, graph)  # 142 注意有一些子图不是全连通的，需要去除
+        bench_data_remove_small, graph)
+    # 142 去除个数为2的，保证为全连通图，对于cyc2008数据集来说，只剩下142个子图
+    # 143 不应该这么严格，只需要去除孤立的点，那么可以剩下143个子图
     middle_data_remove_fake_graph = remove_fake_graph(
         middle_data_remove_small, graph)  # 882
+    middle_data_remove_fake_graph = set(
+        list(middle_data_remove_fake_graph)[:180])
 
-    random_data_size_list = [len(item) for item in (
-        bench_data_remove_fake_graph | middle_data_remove_fake_graph)]
-    random_target = 1000
+    random_data_size_list = [len(item)
+                             for item in bench_data_remove_fake_graph]
+    random_target = 180
     random_data = get_random_graphs(
         graph, random_data_size_list, random_target)
     statics_nodes = {
@@ -199,6 +233,12 @@ def main(reload=False):
         'mid': middle_data_remove_fake_graph,
         'neg': random_data
     }
+
+    showsubgraphs(graph, bench_data_remove_fake_graph, "Data/Yeast/temp/bench")
+    showsubgraphs(graph, middle_data_remove_fake_graph,
+                  "Data/Yeast/temp/middle")
+    showsubgraphs(graph, random_data, "Data/Yeast/temp/random")
+
     dgl_graphs = {
         'pos': [single_data(nx.subgraph(graph, item), 0) for item in statics_nodes['pos']],
         'mid': [single_data(nx.subgraph(graph, item), 1) for item in statics_nodes['mid']],
