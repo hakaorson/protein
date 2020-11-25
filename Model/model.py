@@ -1,6 +1,6 @@
 from Model import graph_classify
 import torch
-from Data import data
+from Data.Yeast import data
 import pickle
 import dgl
 import os

@@ -2,7 +2,7 @@
 # # python D:/code/gao_complex/GraphCut/other_methods/coach.py D:/code/gao_complex/Data/dip2.str.tab
 # result = process.main_process('Data/CYC2008_408', 'Data/cut/dip2_coach')
 # pass
-from Data import data
+from Data.Yeast import data
 from Model import graph_classify
 from Model import model
 import random
@@ -31,9 +31,10 @@ if __name__ == "__main__":
         gcn_layers=2,
         classnum=3
     )
-    model_path = "Model/saved_models_{}".format(time.strftime('%m_%d_%H_%M', time.localtime()))
+    model_path = "Model/saved_models_{}".format(
+        time.strftime('%m_%d_%H_%M', time.localtime()))
     # model.train(base_model, traindatas, batchsize, model_path)
 
-    base_model.load_state_dict(torch.load("Model/saved_models_11_18_10_12/90.pt"))
+    base_model.load_state_dict(torch.load(
+        "Model/saved_models_11_18_10_12/90.pt"))
     model.test(base_model, testdatas)
-    
