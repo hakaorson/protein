@@ -2,3 +2,4 @@ Data/Yeast/embedding/blast/POSSUM
 Data/Yeast/data
 Data/Yeast/temp
 **/**.pt
+**/**.png

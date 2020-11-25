@@ -72,15 +72,21 @@ def test(model, datas):
         predindex = pred.index(max(pred))
         predicts.append(predindex)
         pass
-    static = [[0, 0], [0, 0], [0, 0]]
+    static_recall = [[0, 0], [0, 0], [0, 0]]
+    static_precision = [[0, 0], [0, 0], [0, 0]]
     for index in range(len(datas)):
         truelabel = labels[index]
         predictlabel = predicts[index]
-        static[truelabel][1] += 1
+        static_recall[truelabel][1] += 1
+        static_precision[predictlabel][1] += 1
         if truelabel == predictlabel:
-            static[truelabel][0] += 1
-    for a, b in static:
-        print(a/b)
+            static_recall[truelabel][0] += 1
+            static_precision[predictlabel][0] += 1
+    for index in range(len(static_recall)):
+        recallnum = static_recall[index][0]/static_recall[index][1]
+        precinum = static_precision[index][0]/static_precision[index][1]
+        f1num = 2*recallnum*precinum/(recallnum+precinum)
+        print("recall {},prec {},f1 {}".format(recallnum, precinum, f1num))
 
 
 if __name__ == "__main__":

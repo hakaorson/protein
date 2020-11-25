@@ -15,7 +15,8 @@ class Classifier(nn.Module):
         '''
         super(Classifier, self).__init__()
         self.conv1 = GraphConv(in_dim, hidden_dim, allow_zero_in_degree=True)
-        self.conv2 = GraphConv(hidden_dim, hidden_dim, allow_zero_in_degree=True)
+        self.conv2 = GraphConv(hidden_dim, hidden_dim,
+                               allow_zero_in_degree=True)
         self.classify = nn.Linear(hidden_dim, n_classes)
 
     def forward(self, g):
@@ -54,10 +55,10 @@ class DGLInit(nn.Module):
 
 
 class SingleGCN(nn.Module):
-    def __init__(self, in_feats, out_feats, weight, acti):
+    def __init__(self, in_feats, out_feats, weight):
         super().__init__()
         self.gcn_weight = weight
-        self.GCNlayers = acti
+        self.Acti = nn.LeakyReLU()
 
     def msg_gcn(self, edge):
         msg = torch.div(edge.src['hidden'], edge.src['degree'])
@@ -76,6 +77,8 @@ class SingleGCN(nn.Module):
     def forward(self, dgl_data: dgl.DGLGraph):
         # stack在此处只有记录的作用
         dgl_data.update_all(self.msg_gcn, self.reduce_gcn, self.apply_gcn)
+        dgl_data.ndata['hidden'] = self.Acti(dgl_data.ndata['hidden'])
+
         dgl_data.ndata['stack'] = torch.cat(
             [dgl_data.ndata['stack'], dgl_data.ndata['hidden']], 1)
         return dgl_data
@@ -84,12 +87,11 @@ class SingleGCN(nn.Module):
 class GCNProcess(nn.Module):
     def __init__(self, size, layer):
         super().__init__()
-        self.acti = nn.ReLU()
         self.gcn_weight = nn.Linear(size, size, bias=True)
         self.GCNlayers = nn.ModuleList()
         for lay in range(layer):
             self.GCNlayers.append(
-                SingleGCN(size, size, self.gcn_weight, self.acti))
+                SingleGCN(size, size, self.gcn_weight))
 
     def forward(self, dgl_data):
         for model in self.GCNlayers:
@@ -98,11 +100,13 @@ class GCNProcess(nn.Module):
 
 
 class GCNPredict(nn.Module):
-    def __init__(self):
+    def __init__(self, featsize, layersize):
         super().__init__()
+        self.weight = nn.Linear(featsize*(layersize+1), featsize, bias=True)
 
     def forward(self, dgl_data):
-        dgl_predict = torch.mean(dgl_data.ndata['hidden'], 0).reshape(1, -1)
+        dgl_predict = torch.mean(dgl_data.ndata['stack'], 0).reshape(1, -1)
+        dgl_predict = self.weight(dgl_predict)
         return dgl_predict
 
 
@@ -174,7 +178,7 @@ class SimpleModel(nn.Module):
             nodefeatsize, edgefeatsize, hidden_size)
         self.graph_feat_init = nn.Linear(graphfeatsize, hidden_size)
         self.gcn_process = GCNProcess(hidden_size, gcn_layers)
-        self.gcn_predict = GCNPredict()
+        self.gcn_predict = GCNPredict(hidden_size, gcn_layers)
         self.predictwithbase = Predictwithbase(hidden_size*2, classnum)
         self.predictnobase = Predictnobase(hidden_size, classnum)
         self.predictonlybase = PredictOnlyBase(hidden_size, classnum)
@@ -192,8 +196,8 @@ class SimpleModel(nn.Module):
         nodedata_aftergcn = dgl_digit.ndata['hidden']
         dgl_feat = self.gcn_predict(dgl_digit)
         # predict = self.predictwithbase(dgl_feat, base_feat)
-        predict = self.predictonlybase(base_feat)
-        # predict = self.predictnobase(dgl_feat)
+        # predict = self.predictonlybase(base_feat)
+        predict = self.predictnobase(dgl_feat)
         return predict
 
 
