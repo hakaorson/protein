@@ -12,7 +12,13 @@ import pickle
 
 if __name__ == "__main__":
     random.seed(666)
-    datas = data.main(reload=True)
+    node_path = "Data/Yeast/embedding/dip_node"
+    edge_path = "Data/Yeast/embedding/dip_edge"
+    postive_path = "Data/Yeast/bench/CYC2008"
+    middle_path = "Data/Yeast/bench/dip_coach"
+    save_path = "Data/Yeast/first_stage"
+    datas = data.first_stage(node_path, edge_path,
+                             postive_path, middle_path, save_path, reload=True)
     datas = [[item.graph, item.feat, item.label] for item in datas]
     random.shuffle(datas)
     size = len(datas)

@@ -4,9 +4,11 @@ import networkx as nx
 import dgl
 import torch
 import pickle
+import queue
 import os
 import numpy as np
 from sklearn import preprocessing
+from multiprocessing import pool as mtp
 from matplotlib import pyplot as plt
 
 
@@ -34,6 +36,7 @@ def read_graph(node_path, edge_path):
     return nodes, nodematrix, edges, edgematrix
 
 
+# 数据预处理，一些归一化等等
 def dataprocess(matrix):
     matrix = np.array(matrix)
     matrix = preprocessing.normalize(matrix, axis=0)
@@ -49,34 +52,70 @@ def get_graph(nodes, nodematrix, edges, edgematrix):
     return res
 
 
+def subgraphs(complexes, graph):
+    res = []
+    for comp in complexes:
+        subgraph = nx.subgraph(graph, comp)
+        sub_components = nx.connected_components(subgraph)
+        for sub_component in sub_components:
+            res.append(sub_component.nodes())
+    return res
+
+
 def get_random_graphs(graph, l_list, target):
-    result = set()
-    while len(result) < target:
+    pool = mtp.Pool(processes=5)
+    result = list()
+    for i in range(target):
         size = random.choice(l_list)
-        success = False
-        while success is False:
-            nodes = get_single_random_graph_nodes(graph, size)
-            if nodes is not None and nodes not in result:
-                success = True
-                result.add(nodes)
-    return result
+        result.append(pool.apply_async(
+            get_single_random_graph_nodes, args=(graph, size)))
+    pool.close()
+    pool.join()
+    res = [item.get() for item in result]
+    return res
 
 
 def get_single_random_graph_nodes(graph, size):  # 这种随机化结果产生的区分度过强，看有没有其他随机的方案
-    beginer = random.choice(list(graph.nodes.keys()))
+    all_nodes = list(graph.nodes.keys())  # 按照权重取值
+    all_node_weights = [graph.degree(node) for node in all_nodes]
+    beginer = random.choices(all_nodes, weights=all_node_weights, k=1)[0]
+    # 按照权重选取下一个点
     node_set = set([beginer])
-    neighbor_sets = set(graph.neighbors(beginer))
+    neighbor_lists = list(graph.neighbors(beginer))
+    neighbor_weights = [1 for i in range(len(neighbor_lists))]
+    max_weight = 1
     while len(node_set) < size:
-        try:
-            next_node = random.choice(list(neighbor_sets))
-            neighbor_sets.remove(next_node)
-            node_set.add(next_node)
-            for nei in graph.neighbors(next_node):
-                if nei not in node_set:
-                    neighbor_sets.add(nei)
-        except Exception:
-            return None
-    return tuple(node_set)
+        next_node = random.choices(
+            neighbor_lists, weights=neighbor_weights, k=1)[0]
+        node_index = neighbor_lists.index(next_node)
+        neighbor_lists.pop(node_index)
+        the_weight = neighbor_weights.pop(node_index)
+        max_weight = max(max_weight, the_weight)
+
+        if (the_weight == 1 and max_weight >= 100) or (the_weight == 10 and max_weight >= 10000):  # 密集子图之后不应该再出现低权重图
+            continue
+
+        node_set.add(next_node)
+        for nei in graph.neighbors(next_node):
+            if nei not in node_set:
+                if nei in neighbor_lists:
+                    nei_index = neighbor_lists.index(nei)
+                    neighbor_weights[nei_index] *= 10  # 强调
+                else:
+                    neighbor_lists.append(nei)
+                    neighbor_weights.append(1)
+    sub_graph = nx.subgraph(graph, node_set)  # 最后还需要在子图里面去除1/4的度小的节点
+    items = [(node, sub_graph.degree(node)) for node in node_set]
+    remove_num_direct = min(len(node_set)//4, 6)
+
+    degrees = [sub_graph.degree(node) for node in node_set]
+    meandegree = (sum(degrees)/len(degrees))
+    sitems = sorted(items, key=lambda i: i[1])
+    res = []
+    for item in sitems[remove_num_direct:]:
+        if item[1] > int(meandegree/2):  # 按照平均度数再减去一部分
+            res.append(item[0])
+    return tuple(res)
 
 
 def read_bench(path):
@@ -94,7 +133,23 @@ def read_bench(path):
     return res
 
 
-# 只留下大于等于cutnum的项
+# TODO 具体怎么做以后需要改进，子图合并操
+def merged_data(items):
+    all_merged_res = []
+    for item in items:
+        item = set(item)
+        cur_merge_target = []
+        tempres = item
+        for index, single_res in enumerate(all_merged_res):
+            if len(item & single_res)/min(len(item), len(single_res)) >= 0.5:
+                cur_merge_target.append(index)
+                tempres = tempres | single_res
+        for removeindex in cur_merge_target[::-1]:
+            all_merged_res.pop(removeindex)  # 从后面往前面剔除
+        all_merged_res.append(tempres)
+    return all_merged_res
+
+
 def remove_small_graph(datas, cut_num):
     res = set()
     for data in datas:
@@ -111,7 +166,7 @@ def remove_fake_graph(datas, graph):
             continue
         subgraph = graph.subgraph(data)
         '''
-        #如果具有多余一个连通子图，则跳过
+        # 如果具有多余一个连通子图，则跳过
         sub_compos = nx.connected_components(subgraph)
         bigest_graph = next(sub_compos)
         if len(bigest_graph) != len(subgraph.nodes):
@@ -194,28 +249,36 @@ class single_data:
         return list(result)
 
 
-def first_stage(reload=False):
-    node_path = "Data/Yeast/embedding/dip_node"
-    edge_path = "Data/Yeast/embedding/dip_edge"
-    postive_path = "Data/Yeast/bench/CYC2008"
-    middle_path = "Data/Yeast/bench/dip_coach"
-    save_path = "Data/Yeast/first_stage"
+def first_stage(node_path, edge_path, postive_path, middle_path, save_path, reload=True):
     if not reload:
         with open(save_path, 'rb')as f:
             result = pickle.load(f)
         return result
+    '''
+    下面是读取点数据，和边数据，并做特征初始化处理
+    '''
     nodes, nodematrix, edges, edgematrix = read_graph(node_path, edge_path)
     nodematrix = dataprocess(nodematrix)
     edgematrix = dataprocess(edgematrix)
     graph = get_graph(nodes, nodematrix, edges, edgematrix)
-
-    get_single_random_graph_nodes(graph, 5)
+    '''
+    读取bench数据做去重处理
+    '''
     bench_data = read_bench(postive_path)
     middle_data = read_bench(middle_path)
+    random_target = (len(bench_data)+len(middle_data))  # 先多取一些，再截取需要的部分
+    random_data = get_random_graphs(
+        graph, [len(item) for item in bench_data | middle_data], random_target//10)
+    # showsubgraphs(graph, random_data, "Data/Yeast/pictures/random")  # 看一下
 
-    bench_data_remove_small = remove_small_graph(bench_data, 3)  # 236个
-    middle_data_remove_small = remove_small_graph(middle_data, 3)  # 883
-
+    # 接下来需要提取真正的graph，找出所有的subgraph
+    bench_data = subgraphs(bench_data, graph)
+    middle_data = subgraphs(middle_data, graph)
+    # 接下来归并处理
+    bench_data = merged_data(bench_data)
+    middle_data = merged_data(middle_data)
+    random_data = merged_data(random_data)
+    # 接下来去重
     bench_data_remove_fake_graph = remove_fake_graph(
         bench_data_remove_small, graph)
     # 142 去除个数为2的，保证为全连通图，对于cyc2008数据集来说，只剩下142个子图
@@ -236,10 +299,11 @@ def first_stage(reload=False):
         'neg': random_data
     }
 
-    showsubgraphs(graph, bench_data_remove_fake_graph, "Data/Yeast/temp/bench")
+    showsubgraphs(graph, bench_data_remove_fake_graph,
+                  "Data/Yeast/pictures/bench")
     showsubgraphs(graph, middle_data_remove_fake_graph,
-                  "Data/Yeast/temp/middle")
-    showsubgraphs(graph, random_data, "Data/Yeast/temp/random")
+                  "Data/Yeast/pictures/middle")
+    showsubgraphs(graph, random_data, "Data/Yeast/pictures/random")
 
     dgl_graphs = {
         'pos': [single_data(nx.subgraph(graph, item), 0) for item in statics_nodes['pos']],
