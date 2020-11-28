@@ -1,7 +1,3 @@
-# from Check import process
-# # python D:/code/gao_complex/GraphCut/other_methods/coach.py D:/code/gao_complex/Data/dip2.str.tab
-# result = process.main_process('Data/CYC2008_408', 'Data/cut/dip2_coach')
-# pass
 from Data.Yeast import data
 from Model import graph_classify
 from Model import model
@@ -18,18 +14,20 @@ if __name__ == "__main__":
     middle_path = "Data/Yeast/bench/dip_coach"
     save_path = "Data/Yeast/first_stage"
     datas = data.first_stage(node_path, edge_path,
-                             postive_path, middle_path, save_path, reload=True)
+                             postive_path, middle_path, save_path, reload=False, direct=False)
+    data.analisys_data(datas)  # 统计一下数据的信息
     datas = [[item.graph, item.feat, item.label] for item in datas]
     random.shuffle(datas)
     size = len(datas)
     cut1, cut2 = int(0.7*size), int(0.85*size)
-    traindatas, testdatas = datas[:cut1], datas[cut1:]
+    traindatas, valdatas, testdatas = datas[:
+                                            cut1], datas[cut1:cut2], datas[cut2:]
 
     nodefeatsize = 420
     edgefeatsize = 10
     graphfeatsize = 10
     batchsize = 10
-    base_model = graph_classify.SimpleModel(
+    base_model = graph_classify.GCNBASEModel(
         nodefeatsize=nodefeatsize,
         edgefeatsize=edgefeatsize,
         graphfeatsize=graphfeatsize,
@@ -37,10 +35,14 @@ if __name__ == "__main__":
         gcn_layers=2,
         classnum=3
     )
-    model_path = "Model/saved_models_{}".format(
-        time.strftime('%m_%d_%H_%M', time.localtime()))
-    # model.train(base_model, traindatas, batchsize, model_path)
+    model_path = "Model/saved_models_{}_{}".format(base_model.name,
+                                                   time.strftime('%m_%d_%H_%M', time.localtime()))
+    default_epoch = 50
 
+    model.train(base_model, traindatas, valdatas,
+                batchsize, model_path, default_epoch)
     base_model.load_state_dict(torch.load(
-        "Model/saved_models_11_18_10_12/90.pt"))
+        model_path+'/{}.pt'.format(default_epoch)))
+    # base_model.load_state_dict(torch.load(
+    #     "Model/saved_models_base_11_28_19_39/10.pt"))
     model.test(base_model, testdatas)

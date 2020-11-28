@@ -25,13 +25,12 @@ def collate(samples):
     return batch_graph, feats, torch.tensor(labels)
 
 
-def train(model, datas, batchsize, path):
-    os.makedirs(path, exist_ok=True)
+def train(model, datas, vals, batchsize, path, epoch):
     cross_loss = torch.nn.CrossEntropyLoss(
         weight=torch.FloatTensor([1, 1, 1]))  # 这苦有问题
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
     model.train()
-    for i in range(10000):
+    for i in range(1, epoch+1):
         epoch_loss = 0
         # data_loader = torch.utils.data.DataLoader(
         #     datas, batch_size=batchsize, shuffle=True, collate_fn=collate)
@@ -46,20 +45,29 @@ def train(model, datas, batchsize, path):
         for batch_data in data_gener:
             batch_loss = 0
             for item in batch_data:
-                primary_node_target = torch.tensor(
-                    item[2], dtype=torch.long).reshape(-1)
+                target = torch.tensor(item[2], dtype=torch.long).reshape(-1)
                 predict = model(item[0], item[1])
 
-                loss = cross_loss(predict, primary_node_target)
+                loss = cross_loss(predict, target)
                 batch_loss += loss
                 epoch_loss += loss
             optimizer.zero_grad()
             batch_loss.backward()
             optimizer.step()
             # print('batch loss:', batch_loss.detach().numpy())
-        if i != 0 and i % 10 == 0:
+        if i != 0 and i % 5 == 0:
+            os.makedirs(path, exist_ok=True)
             torch.save(model.state_dict(), path+'/{}.pt'.format(i))
-        print('epoch {} loss:'.format(i), epoch_loss.detach().numpy())
+
+        val_metrix = test(model, vals)
+        val_loss = 0
+        for item in vals:
+            target = torch.tensor(item[2], dtype=torch.long).reshape(-1)
+            predict = model(item[0], item[1])
+            val_loss += cross_loss(predict, target)
+        print('epoch {} loss:'.format(i), epoch_loss.detach().numpy() / len(datas),
+              'val loss:', val_loss.detach().numpy() / len(vals),
+              'val metrix:', val_metrix)
 
 
 def test(model, datas):
@@ -82,11 +90,16 @@ def test(model, datas):
         if truelabel == predictlabel:
             static_recall[truelabel][0] += 1
             static_precision[predictlabel][0] += 1
+    res = 0
     for index in range(len(static_recall)):
-        recallnum = static_recall[index][0]/static_recall[index][1]
-        precinum = static_precision[index][0]/static_precision[index][1]
+        recallnum = static_recall[index][0] / \
+            static_recall[index][1] if static_recall[index][1] else 1
+        precinum = static_precision[index][0] / \
+            static_precision[index][1] if static_precision[index][1] else 1
         f1num = 2*recallnum*precinum/(recallnum+precinum)
-        print("recall {},prec {},f1 {}".format(recallnum, precinum, f1num))
+        # print("recall {},prec {},f1 {}".format(recallnum, precinum, f1num))
+        res += f1num
+    return res
 
 
 if __name__ == "__main__":

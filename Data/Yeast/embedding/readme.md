@@ -24,3 +24,5 @@ subcell定位 Subcellular location [CC]
 技巧
     在uniprot中可以下载到所有的蛋白质，操作是在advanced搜索里面做空白搜索即可（一共56万个）
     在download的时候下载map，可以只下载id map数据
+
+注意计算特征的时候是无关有向图和无向图的

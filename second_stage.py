@@ -1,8 +1,4 @@
-# from Check import process
-# # python D:/code/gao_complex/GraphCut/other_methods/coach.py D:/code/gao_complex/Data/dip2.str.tab
-# result = process.main_process('Data/CYC2008_408', 'Data/cut/dip2_coach')
-# pass
-from Data import data
+from Data.Yeast import data
 from Model import graph_classify
 from Model import model
 import random
@@ -12,12 +8,16 @@ import pickle
 
 if __name__ == "__main__":
     random.seed(666)
-    datas = data.main(reload=True)
-    datas = [[item.graph, item.feat, item.label] for item in datas]
-    random.shuffle(datas)
-    size = len(datas)
-    cut1, cut2 = int(0.7*size), int(0.85*size)
-    traindatas, testdatas = datas[:cut1], datas[cut1:]
+    node_path = "Data/Yeast/embedding/dip_node"
+    edge_path = "Data/Yeast/embedding/dip_edge"
+    model_path = "Model/saved_models_gcnbase_11_28_19_56/30.pt"
+    thred = 0.5
+    normal_datas = data.read_bench(normal_path)  # 通过获取子进程输出
+    expand_candi_datas = data.read_bench(expand_path)
+    expand_candi_graphs = data.second_stage(
+        node_path, edge_path, expand_path, direct=False)
+    expand_candi_graphs = [[item.graph, item.feat]
+                           for item in expand_candi_graphs]
 
     nodefeatsize = 420
     edgefeatsize = 10
@@ -31,9 +31,10 @@ if __name__ == "__main__":
         gcn_layers=2,
         classnum=3
     )
-    model_path = "Model/saved_models_{}".format(time.strftime('%m_%d_%H_%M', time.localtime()))
-    # model.train(base_model, traindatas, batchsize, model_path)
-
-    base_model.load_state_dict(torch.load("Model/saved_models_11_18_10_12/90.pt"))
-    model.test(base_model, testdatas)
-    
+    base_model.load_state_dict(torch.load(model_path))
+    res = model.select(base_model, expand_candi_graphs, thred)
+    expand_datas = []
+    for index, val in enumerate(res):
+        if val:
+            expand_datas.append(expand_candi_datas[index])
+    # 到目前为止准备好了normal和expand

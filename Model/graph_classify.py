@@ -123,7 +123,7 @@ class Predictwithbase(nn.Module):
         return result
 
 
-class Predictnobase(nn.Module):
+class PredictOnlyGCN(nn.Module):
     def __init__(self, in_size, out_size):
         super().__init__()
         self.predict = nn.Linear(in_size, out_size)
@@ -171,33 +171,66 @@ class Node_feat_fusion(nn.Module):
         return dgl_data
 
 
-class SimpleModel(nn.Module):
+class GCNModel(nn.Module):
     def __init__(self, nodefeatsize, edgefeatsize, graphfeatsize, hidden_size, gcn_layers, classnum):
         super().__init__()
+        self.name = "gcn"
+        self.nodeedge_feat_init = DGLInit(
+            nodefeatsize, edgefeatsize, hidden_size)
+        self.graph_feat_init = nn.Linear(graphfeatsize, hidden_size)
+        self.gcn_process = GCNProcess(hidden_size, gcn_layers)
+        self.gcn_predict = GCNPredict(hidden_size, gcn_layers)
+        self.predictGCN = PredictOnlyGCN(hidden_size, classnum)
+        self.edge2node_feat = Node_feat_fusion()
+
+    def forward(self, dgl_data, base_data):
+        dgl_digit = self.nodeedge_feat_init(dgl_data)
+        dgl_digit = self.edge2node_feat(dgl_digit)
+        dgl_digit = self.gcn_process(dgl_digit)
+        dgl_feat = self.gcn_predict(dgl_digit)
+        predict = self.predictGCN(dgl_feat)
+        return predict
+
+
+class BASEModel(nn.Module):
+    def __init__(self, nodefeatsize, edgefeatsize, graphfeatsize, hidden_size, gcn_layers, classnum):
+        super().__init__()
+        self.name = "base"
+        self.nodeedge_feat_init = DGLInit(
+            nodefeatsize, edgefeatsize, hidden_size)
+        self.graph_feat_init = nn.Linear(graphfeatsize, hidden_size)
+        self.gcn_process = GCNProcess(hidden_size, gcn_layers)
+        self.gcn_predict = GCNPredict(hidden_size, gcn_layers)
+        self.predictBase = PredictOnlyBase(hidden_size, classnum)
+        self.edge2node_feat = Node_feat_fusion()
+
+    def forward(self, dgl_data, base_data):
+        base_feat = self.graph_feat_init(base_data)
+        predict = self.predictBase(base_feat)
+        return predict
+
+
+class GCNBASEModel(nn.Module):
+    def __init__(self, nodefeatsize, edgefeatsize, graphfeatsize, hidden_size, gcn_layers, classnum):
+        super().__init__()
+        self.name = "gcnbase"
         self.nodeedge_feat_init = DGLInit(
             nodefeatsize, edgefeatsize, hidden_size)
         self.graph_feat_init = nn.Linear(graphfeatsize, hidden_size)
         self.gcn_process = GCNProcess(hidden_size, gcn_layers)
         self.gcn_predict = GCNPredict(hidden_size, gcn_layers)
         self.predictwithbase = Predictwithbase(hidden_size*2, classnum)
-        self.predictnobase = Predictnobase(hidden_size, classnum)
-        self.predictonlybase = PredictOnlyBase(hidden_size, classnum)
+        self.predictGCN = PredictOnlyGCN(hidden_size, classnum)
+        self.predictBase = PredictOnlyBase(hidden_size, classnum)
         self.edge2node_feat = Node_feat_fusion()
 
     def forward(self, dgl_data, base_data):
         base_feat = self.graph_feat_init(base_data)
-
-        # 将edge特征替代node特征，初始的情况就是简单的相加，忽略原来的node
         dgl_digit = self.nodeedge_feat_init(dgl_data)
-        nodedata_init = dgl_digit.ndata['hidden']
         dgl_digit = self.edge2node_feat(dgl_digit)
-        nodedata_from_edge = dgl_digit.ndata['hidden']
         dgl_digit = self.gcn_process(dgl_digit)
-        nodedata_aftergcn = dgl_digit.ndata['hidden']
         dgl_feat = self.gcn_predict(dgl_digit)
-        # predict = self.predictwithbase(dgl_feat, base_feat)
-        # predict = self.predictonlybase(base_feat)
-        predict = self.predictnobase(dgl_feat)
+        predict = self.predictwithbase(dgl_feat, base_feat)
         return predict
 
 
