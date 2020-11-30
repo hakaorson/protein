@@ -51,7 +51,6 @@ class ClusterQuality():
         self.id_map = self.get_id_map()
         self.affinity_method = affinity_method
         self.affinity_matrix = self.get_affinity_matrix()
-        self.score = self.score()
 
     def get_id_map(self):
         id_map = collections.defaultdict(int)
@@ -75,10 +74,10 @@ class ClusterQuality():
         NotImplemented
 
 
-class RecallQuality(ClusterQuality):
-    def __init__(self, cluster_a, cluster_b, affinity_method=None, threshold=None):
+class ClusterQualityF1(ClusterQuality):
+    def __init__(self, cluster_bench, cluster_predict, affinity_method=None, threshold=None):
         self.threshold = threshold
-        super().__init__(cluster_a, cluster_b, affinity_method)
+        super().__init__(cluster_bench, cluster_predict, affinity_method)
 
     def score(self):
         np_matrix = np.array(self.affinity_matrix)

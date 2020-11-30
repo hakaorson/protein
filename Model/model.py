@@ -96,9 +96,23 @@ def test(model, datas):
             static_recall[index][1] if static_recall[index][1] else 1
         precinum = static_precision[index][0] / \
             static_precision[index][1] if static_precision[index][1] else 1
-        f1num = 2*recallnum*precinum/(recallnum+precinum)
+        f1num = 2*recallnum*precinum / \
+            (recallnum+precinum) if recallnum+precinum else 0
         # print("recall {},prec {},f1 {}".format(recallnum, precinum, f1num))
         res += f1num
+    return res
+
+
+def select(model, datas, thred):
+    res = []
+    for item in datas:
+        pred = model(item[0], item[1])
+        pred = list(pred[0].detach().numpy())
+        predindex = pred.index(max(pred))
+        if predindex == 0 or pred[0] >= thred:
+            res.append(True)
+        else:
+            res.append(False)
     return res
 
 

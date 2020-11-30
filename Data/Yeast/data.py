@@ -192,6 +192,12 @@ def showsubgraphs(graph, nodelists, path):
         plt.close()
 
 
+def get_singlegraph(biggraph, nodes, direct, label, index):
+    print('processing {}'.format(index))
+    subgraph = biggraph.subgraph(nodes)
+    return single_data(subgraph, direct, label)
+
+
 class single_data:
     def __init__(self, graph, direct, label=None):
         self.label = label
@@ -244,7 +250,7 @@ class single_data:
 
 
 def first_stage(node_path, edge_path, postive_path, middle_path, save_path, reload=True, direct=False):
-    if not reload:
+    if not reload and os.path.exists(save_path):
         with open(save_path, 'rb')as f:
             result = pickle.load(f)
         return result
@@ -280,21 +286,30 @@ def first_stage(node_path, edge_path, postive_path, middle_path, save_path, relo
     # showsubgraphs(nx_graph, middle_data, "Data/Yeast/pictures/middle")
     # showsubgraphs(nx_graph, random_data, "Data/Yeast/pictures/random")
     # 整理成数据集
-    datasets = []
-    datasets.extend([single_data(nx.subgraph(nx_graph, item), direct, 0)
-                     for item in bench_data])
-    datasets.extend([single_data(nx.subgraph(nx_graph, item), direct, 1)
-                     for item in middle_data])
-    datasets.extend([single_data(nx.subgraph(nx_graph, item), direct, 2)
-                     for item in random_data])
+    all_datas = []
+    all_datas.extend([item, 0] for item in bench_data)
+    all_datas.extend([item, 1] for item in middle_data)
+    all_datas.extend([item, 2] for item in random_data)
+    # 多进程处理
+    multi_res = []
+    pool = mtp.Pool(processes=10)
+    for index, item in enumerate(all_datas):  # TODO 目前调试流程只选取500个
+        multi_res.append(pool.apply_async(
+            get_singlegraph, args=(nx_graph, item, direct, -1, index)))
+    pool.close()
+    pool.join()
+    datasets = [item.get() for item in multi_res]
 
     with open(save_path, 'wb') as f:
         pickle.dump(datasets, f)
     return datasets
 
 
-def second_stage(node_path, edge_path, candi_path, direct=False):
-    # TODO 需要确保为连通图，这里存在矛盾
+def second_stage(node_path, edge_path, candi_path, save_path, reload=True, direct=False):
+    if not reload and os.path.exists(save_path):
+        with open(save_path, 'rb')as f:
+            result = pickle.load(f)
+        return result
     # 获取图数据
     nodes, nodematrix, edges, edgematrix = read_datas(node_path, edge_path)
     # 归一化处理
@@ -302,8 +317,20 @@ def second_stage(node_path, edge_path, candi_path, direct=False):
     edgematrix = dataprocess(edgematrix)
     nx_graph = get_graph(nodes, nodematrix, edges, edgematrix, direct)
     candi_data = read_bench(candi_path)
-    datasets = [single_data(nx.subgraph(nx_graph, item), direct, -1)
-                for item in candi_data]  # -1代表无意义
+    # datasets = [get_singlegraph(nx_graph, item, direct, -1)
+    #             for item in candi_data]  # -1代表无意义
+    # TODO 注意那就不需要考虑不连通的情况，因为这是在我给定的图里面获取的
+    # return datasets
+    multi_res = []
+    pool = mtp.Pool(processes=10)
+    for index, item in enumerate(candi_data[:500]):  # TODO 目前调试流程只选取500个
+        multi_res.append(pool.apply_async(
+            get_singlegraph, args=(nx_graph, item, direct, -1, index)))
+    pool.close()
+    pool.join()
+    datasets = [item.get() for item in multi_res]
+    with open(save_path, 'wb') as f:
+        pickle.dump(datasets, f)
     return datasets
 
 

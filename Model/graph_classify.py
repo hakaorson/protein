@@ -114,12 +114,12 @@ class Predictwithbase(nn.Module):
     def __init__(self, in_size, out_size):
         super().__init__()
         self.predict = nn.Linear(in_size, out_size)
-        # self.soft = nn.Softmax(-1)
+        self.soft = nn.Softmax(-1)
 
     def forward(self, dgl_feat, base_feat):
         final_feat = torch.cat([dgl_feat, base_feat], -1)
         result = self.predict(final_feat)
-        # result = self.soft(result)
+        result = self.soft(result)
         return result
 
 
@@ -127,11 +127,11 @@ class PredictOnlyGCN(nn.Module):
     def __init__(self, in_size, out_size):
         super().__init__()
         self.predict = nn.Linear(in_size, out_size)
-        # self.soft = nn.Softmax(-1)
+        self.soft = nn.Softmax(-1)
 
     def forward(self, dgl_feat):
         result = self.predict(dgl_feat)
-        # result = self.soft(result)
+        result = self.soft(result)
         return result
 
 
@@ -139,11 +139,11 @@ class PredictOnlyBase(nn.Module):
     def __init__(self, in_size, out_size):
         super().__init__()
         self.predict = nn.Linear(in_size, out_size)
-        # self.soft = nn.Softmax(-1)
+        self.soft = nn.Softmax(-1)
 
     def forward(self, base_feat):
         result = self.predict(base_feat)
-        # result = self.soft(result)
+        result = self.soft(result)
         return result
 
 

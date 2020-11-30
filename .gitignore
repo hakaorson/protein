@@ -1,5 +1,7 @@
 Data/Yeast/embedding/blast/POSSUM
-Data/Yeast/first_stage
-Data/Yeast/temp
+Data/Yeast/pictures
+Data/Yeast/first_stage_data
 **/**.pt
 **/**.png
+**/__pycache__
+Data/Yeast/compare
