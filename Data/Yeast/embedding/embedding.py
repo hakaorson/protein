@@ -376,13 +376,16 @@ def deepwalk(nodes, edges):
         for v0, v1 in edges:
             string = "{} {}\n".format(node_map[v0], node_map[v1])
             f.write(string)
-    cmd = "deepwalk --input {} --output {}".format(
+    cmd = "deepwalk --input {} --output {} --format edgelist".format(
         "deepwalk/dipgraph", "deepwalk/res")
+    # print(cmd)
+    if os.path.exists("deepwalk/res"):
+        os.remove("deepwalk/res")
     subprocess.Popen(cmd)
     while True:
         if not os.path.exists("deepwalk/res"):
             continue
-        time.sleep(3000)
+        time.sleep(3)
         with open("deepwalk/res", 'r')as f:
             next(f)
             res = {}
@@ -406,15 +409,15 @@ def compute_node_feats(nodes, edges, nodedatas):
 
 
 if __name__ == "__main__":
-    dippath = '../network/dip'
+    dippath = 'dip_edge_nofeat'
     nodes, edges = read_edges(dippath)
     # deepwalk(nodes, edges)  # TODO 只是测试一下，后面删除
     save(nodes, 'uniprotkb_ids')
     uniprotkb_path = 'uniprotkb_datas'
     uniprotkb_datas = read_uniprotkb(uniprotkb_path)
-
-    edge_feats = compute_edge_feats(edges, uniprotkb_datas)
     node_feats = compute_node_feats(nodes, edges, uniprotkb_datas)
+    edge_feats = compute_edge_feats(edges, uniprotkb_datas)
+
 
     dip_node_path = 'dip_node'
     dip_edge_path = 'dip_edge'

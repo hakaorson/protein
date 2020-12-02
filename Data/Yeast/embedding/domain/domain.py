@@ -49,5 +49,5 @@ if __name__ == "__main__":
             edges_id.add(tuple([mapping[edge0], mapping[edge1], weight]))
     with open(r'D:\code\gao_complex\Data\Yeast\embedding\domain\domain_graph', 'w') as f:
         for edge0, edge1, weight in edges_id:
-            single_str = '\t'.join([edge0, edge1, str(weight)])+'\n'
+            single_str = ' '.join([edge0, edge1, str(weight)])+'\n'
             f.write(single_str)
