@@ -4,9 +4,11 @@ import sys
 import re
 import networkx as nx
 import os
+import time
 import queue
 import random
 from goatools import obo_parser
+import subprocess
 
 
 def findSubcellWords(str_input):
@@ -359,14 +361,41 @@ def compute_edge_feats(edges, nodedatas):
 
 # 计算blast
 def compute_node_feat_blast(mapping, node):
+    # 不明意义的420维度数据集
     if node in mapping.keys():
         return list(map(float, mapping[node]))
     else:
         return 420*[0.0]
 
 
-def compute_node_feats(nodes, nodedatas):
+def deepwalk(nodes, edges):
+    node_map = {}
+    for index, node in enumerate(nodes):
+        node_map[node] = index
+    with open("deepwalk/dipgraph", 'w') as f:
+        for v0, v1 in edges:
+            string = "{} {}\n".format(node_map[v0], node_map[v1])
+            f.write(string)
+    cmd = "deepwalk --input {} --output {}".format(
+        "deepwalk/dipgraph", "deepwalk/res")
+    subprocess.Popen(cmd)
+    while True:
+        if not os.path.exists("deepwalk/res"):
+            continue
+        os.wait(3000)
+        with open("deepwalk/res", 'r')as f:
+            next(f)
+            res = {}
+            for line in f:
+                line_list = list(line.strip().split(" "))
+                nodeid = nodes[int(line_list[0])]
+                res[nodeid] = line_list[1:]
+            return res
+
+
+def compute_node_feats(nodes, edges, nodedatas):
     blast_map = read_mapping("blast/POSSUM_DATA")
+    deepwalkres = deepwalk(nodes, edges)
     res = {}
     for node in nodes:
         tempEmb = {}
@@ -378,12 +407,13 @@ def compute_node_feats(nodes, nodedatas):
 if __name__ == "__main__":
     dippath = '../network/dip'
     nodes, edges = read_edges(dippath)
+    # deepwalk(nodes, edges)  # TODO 只是测试一下，后面删除
     save(nodes, 'uniprotkb_ids')
     uniprotkb_path = 'uniprotkb_datas'
     uniprotkb_datas = read_uniprotkb(uniprotkb_path)
 
     edge_feats = compute_edge_feats(edges, uniprotkb_datas)
-    node_feats = compute_node_feats(nodes, uniprotkb_datas)
+    node_feats = compute_node_feats(nodes, edges, uniprotkb_datas)
 
     dip_node_path = 'dip_node'
     dip_edge_path = 'dip_edge'

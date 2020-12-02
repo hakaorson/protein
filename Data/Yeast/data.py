@@ -170,16 +170,19 @@ def merged_data(items):
 
 
 # 去重处理
+# 去重处理需要按照score NA的0.25作为分界
 def remove_duplicate(complexes, targets):
+    af_matrix = [[0 for j in range(len(targets))]for i in range(
+        len(complexes))]
+    for i in range(len(complexes)):
+        for j in range(len(targets)):
+            comp, targ = complexes[i], targets[j]
+            af_matrix[i][j] = pow(len(comp & targ), 2)/(len(comp)*len(targ))
     res = []
-    for comp in complexes:
-        dup = False
-        for targ in targets:
-            if len(comp & targ)/(len(comp | targ)) > 0.8:
-                dup = True
-                break
-        if dup is False:
-            res.append(comp)
+    for index, comp in enumerate(complexes):
+        if max(af_matrix[index]) >= 0.25:
+            continue
+        res.append(comp)
     return res
 
 
@@ -258,7 +261,8 @@ def first_stage(node_path, edge_path, postive_path, middle_path, save_path, relo
     下面是读取点数据，和边数据，并做特征初始化处理
     '''
     # 获取图数据
-    nodes, nodematrix, edges, edgematrix = read_datas(node_path, edge_path)
+    nodes, nodematrix, edges, edgematrix = read_datas(
+        node_path, edge_path)  # TODO 做特征选择
     # 归一化处理
     nodematrix = dataprocess(nodematrix)
     edgematrix = dataprocess(edgematrix)
@@ -270,6 +274,7 @@ def first_stage(node_path, edge_path, postive_path, middle_path, save_path, relo
     random_data = get_random_graphs(
         nx_graph, [len(item) for item in bench_data + middle_data], random_target)  # TODO 设定随机的数目
 
+    # TODO 这里的处理对不对，是不是从逻辑上来说就不应该出现子图以及合并的情况
     # 接下来需要提取真正的graph，找出所有的subgraph
     bench_data = subgraphs(bench_data, nx_graph)
     middle_data = subgraphs(middle_data, nx_graph)
@@ -278,9 +283,8 @@ def first_stage(node_path, edge_path, postive_path, middle_path, save_path, relo
     middle_data = merged_data(middle_data)  # 888->416
     random_data = merged_data(random_data)  # 129->99
     # 接下来去重
-    middle_data = remove_duplicate(middle_data, bench_data)[:len(bench_data)]
-    random_data = remove_duplicate(
-        random_data, bench_data+middle_data)[:len(bench_data)]
+    middle_data = remove_duplicate(middle_data, bench_data)
+    random_data = remove_duplicate(random_data, bench_data+middle_data)
     # 存储图片
     # showsubgraphs(nx_graph, bench_data, "Data/Yeast/pictures/bench")
     # showsubgraphs(nx_graph, middle_data, "Data/Yeast/pictures/middle")
@@ -293,9 +297,10 @@ def first_stage(node_path, edge_path, postive_path, middle_path, save_path, relo
     # 多进程处理
     multi_res = []
     pool = mtp.Pool(processes=10)
-    for index, item in enumerate(all_datas):  # TODO 目前调试流程只选取500个
+    # TODO 目前调试流程只选取500个
+    for index, (item, label) in enumerate(all_datas):
         multi_res.append(pool.apply_async(
-            get_singlegraph, args=(nx_graph, item, direct, -1, index)))
+            get_singlegraph, args=(nx_graph, item, direct, label, index)))
     pool.close()
     pool.join()
     datasets = [item.get() for item in multi_res]
@@ -305,7 +310,7 @@ def first_stage(node_path, edge_path, postive_path, middle_path, save_path, relo
     return datasets
 
 
-def second_stage(node_path, edge_path, candi_path, save_path, reload=True, direct=False):
+def second_stage(node_path, edge_path, candi_data, save_path, reload=True, direct=False):
     if not reload and os.path.exists(save_path):
         with open(save_path, 'rb')as f:
             result = pickle.load(f)
@@ -316,14 +321,13 @@ def second_stage(node_path, edge_path, candi_path, save_path, reload=True, direc
     nodematrix = dataprocess(nodematrix)
     edgematrix = dataprocess(edgematrix)
     nx_graph = get_graph(nodes, nodematrix, edges, edgematrix, direct)
-    candi_data = read_bench(candi_path)
     # datasets = [get_singlegraph(nx_graph, item, direct, -1)
     #             for item in candi_data]  # -1代表无意义
     # TODO 注意那就不需要考虑不连通的情况，因为这是在我给定的图里面获取的
     # return datasets
     multi_res = []
     pool = mtp.Pool(processes=10)
-    for index, item in enumerate(candi_data[:500]):  # TODO 目前调试流程只选取500个
+    for index, item in enumerate(candi_data):
         multi_res.append(pool.apply_async(
             get_singlegraph, args=(nx_graph, item, direct, -1, index)))
     pool.close()

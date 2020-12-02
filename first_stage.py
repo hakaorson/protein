@@ -11,10 +11,10 @@ if __name__ == "__main__":
     nodeWithFeat_path = "Data/Yeast/embedding/dip_node"
     edgeWithFeat_path = "Data/Yeast/embedding/dip_edge"
     postive_path = "Data/Yeast/bench/CYC2008"
-    middle_path = "Data/Yeast/bench/dip_coach"
+    middle_path = "Data/Yeast/compare/dip_coach"
     save_path = "Data/Yeast//first_stage_data"
     datas = data.first_stage(nodeWithFeat_path, edgeWithFeat_path,
-                             postive_path, middle_path, save_path, reload=False, direct=False)
+                             postive_path, middle_path, save_path, reload=True, direct=False)
     # data.analisys_data(datas)  # 统计一下数据的信息
     datas = [[item.graph, item.feat, item.label] for item in datas]
     random.shuffle(datas)
@@ -35,7 +35,7 @@ if __name__ == "__main__":
         gcn_layers=2,
         classnum=3
     )
-    model_path = "Model/saved_models_{}_{}".format(base_model.name,
+    model_path = "Model/saved_models/{}_{}".format(base_model.name,
                                                    time.strftime('%m_%d_%H_%M', time.localtime()))
     default_epoch = 50
 

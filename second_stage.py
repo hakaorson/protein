@@ -73,6 +73,16 @@ class clique_method(baseMethod):
                 f.write(item)
 
 
+class coach_method(baseMethod):
+    def __init__(self, method_path, graph_path, res_path):
+        super().__init__(method_path, graph_path, res_path)
+
+    def getcomplexes(self, cmd_res):
+        with open(self.res_path, 'w') as f:
+            for index, item in enumerate(cmd_res):
+                f.write(item)
+
+
 class mcode_method(baseMethod):
     def __init__(self, method_path, graph_path, res_path):
         super().__init__(method_path, graph_path, res_path)
@@ -100,32 +110,38 @@ def get_method(name):
         return clique_method
     if name == "mcode":
         return mcode_method
+    if name == "coach":
+        return coach_method
     return None
 
 
-if __name__ == "__main__":
-    random.seed(666)
-    nodeWithFeat_path = "Data/Yeast/embedding/dip_node"
-    edgeWithFeat_path = "Data/Yeast/embedding/dip_edge"
-    edge_path = "Data/Yeast/embedding/dip_edge_nofeat"
-    model_path = "Model/saved_models_gcnbase_11_28_19_56/30.pt"
-    bench_path = "Data/Yeast/bench/CYC2008"
-
-    method_name = "mcode"
+def prepare_compare(method_name, edge_path, relo):
     methodor = get_method(method_name)
     method_path = "Utils/ReferMethods/{}.py".format(method_name)
     method_expand_path = "Utils/ReferMethods/{}_expand.py".format(method_name)
     complexes_path = "Data/Yeast/compare/dip_{}".format(method_name)
     complexes_expand_path = complexes_path+"_expand"
-    subgraphs_path = complexes_path+"_graphs"
-    subgraphs_expand_path = complexes_expand_path+"_graphs"
-
     normal_datas = methodor(method_path, edge_path,
-                            complexes_path).main(reload=True)
+                            complexes_path).main(reload=relo)
     expand_candi_datas = methodor(method_expand_path, edge_path,
-                                  complexes_expand_path).main(reload=True)
+                                  complexes_expand_path).main(reload=relo)
+    return normal_datas, expand_candi_datas, complexes_expand_path
+
+
+def main():
+    nodeWithFeat_path = "Data/Yeast/embedding/dip_node"
+    edgeWithFeat_path = "Data/Yeast/embedding/dip_edge"
+    edge_path = "Data/Yeast/embedding/dip_edge_nofeat"
+    model_path = "Model/saved_models/gcnbase_12_02_10_23/30.pt"
+    bench_path = "Data/Yeast/bench/CYC2008"
+    RELOAD = False
+
+    normal_datas, expand_candi_datas, expand_path = prepare_compare(
+        "mcode", edge_path, RELOAD)
+    subgraphs_expand_path = expand_path+"_graphs"
+
     expand_candi_graphs = data.second_stage(
-        nodeWithFeat_path, edgeWithFeat_path, complexes_expand_path, subgraphs_expand_path, reload=True, direct=False)
+        nodeWithFeat_path, edgeWithFeat_path, expand_candi_datas, subgraphs_expand_path, reload=RELOAD, direct=False)
     expand_candi_graphs = [[item.graph, item.feat]
                            for item in expand_candi_graphs]
     nodefeatsize = 420
@@ -141,14 +157,23 @@ if __name__ == "__main__":
         classnum=3
     )
     base_model.load_state_dict(torch.load(model_path))
-    res = model.select(base_model, expand_candi_graphs, 0.4)
+    res = model.select(base_model, expand_candi_graphs, 0.3)
     expand_datas = []
     for index, val in enumerate(res):
         if val:
             expand_datas.append(expand_candi_datas[index])
 
     bench_datas = data.read_bench(bench_path)
-    f1computor = metrix.ClusterQualityF1(
-        bench_datas, expand_datas, metrix.OLAffinity, 0.25)
-    res = f1computor.score()
-    print(res)
+
+    normal_f1computor = metrix.ClusterQualityF1(
+        bench_datas, normal_datas, metrix.NAAffinity, 0.25)
+    normal_score = normal_f1computor.score()
+    expand_f1computor = metrix.ClusterQualityF1(
+        bench_datas, expand_datas, metrix.NAAffinity, 0.25)
+    expand_score = expand_f1computor.score()
+    print(normal_score, expand_score)
+
+
+if __name__ == "__main__":
+    random.seed(666)
+    main()

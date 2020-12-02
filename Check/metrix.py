@@ -76,12 +76,15 @@ class ClusterQuality():
 
 class ClusterQualityF1(ClusterQuality):
     def __init__(self, cluster_bench, cluster_predict, affinity_method=None, threshold=None):
-        self.threshold = threshold
         super().__init__(cluster_bench, cluster_predict, affinity_method)
+        self.threshold = threshold
 
     def score(self):
         np_matrix = np.array(self.affinity_matrix)
         bool_matrix = np_matrix >= self.threshold
-        sum_matrix = np.sum(bool_matrix, 0) > 0  # 这个计算是不是有问题
-        result = sum(sum_matrix)/len(sum_matrix)
-        return(result)
+        prec_matrix = np.sum(bool_matrix, 0) > 0  # 这个计算是不是有问题
+        reca_matrix = np.sum(bool_matrix, 1) > 0
+        precision = sum(prec_matrix)/len(prec_matrix)
+        recall = sum(reca_matrix)/len(reca_matrix)
+        f1 = 2*precision*recall/(precision+recall)
+        return(precision, recall, f1)

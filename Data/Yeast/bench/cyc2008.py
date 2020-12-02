@@ -32,12 +32,12 @@ def readcomplex(path):
 
 
 def reid_genename_uniprot(complexes_genename, maps):
-    res = []
+    uniprots = []
     for comp in complexes_genename:
-        res.append([])
+        uniprots.append([])
         for prot in comp:
-            res[-1].append(maps[prot])
-    return res
+            uniprots[-1].append(maps[prot])
+    return uniprots
 
 
 def save(datas, path):
@@ -48,10 +48,12 @@ def save(datas, path):
 
 
 if __name__ == "__main__":
-    cyccomlex = r'D:\code\gao_complex\Data\protein\source\bench\CYC2008_complex'
-    cycmap = r"D:\code\gao_complex\Data\protein\source\bench\CYC2008_map"
-    cycresult = r"D:\code\gao_complex\Data\protein\source\bench\CYC2008"
+    cyccomlex = 'CYC2008_complex'
+    cycmap = "CYC2008_map"
+    cycuniprot = "CYC2008"
+    cycgenename = "CYC2008_gene"
     maps = readmap(cycmap)
     complexes_genename = readcomplex(cyccomlex)
     complexes_uniprot = reid_genename_uniprot(complexes_genename, maps)
-    save(complexes_uniprot, cycresult)
+    save(complexes_uniprot, cycuniprot)
+    save(complexes_genename, cycgenename)
