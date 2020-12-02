@@ -400,6 +400,7 @@ def compute_node_feats(nodes, edges, nodedatas):
     for node in nodes:
         tempEmb = {}
         tempEmb['blast'] = compute_node_feat_blast(blast_map, node)
+        tempEmb['deepwalk'] = deepwalkres[node]
         res[node] = tempEmb
     return res
 
@@ -434,6 +435,7 @@ if __name__ == "__main__":
             fnofeat.write(edge[0]+' ' + edge[1]+'\n')
     with open(dip_node_path, 'w') as f:
         names = ['node_id']+['blast_{}'.format(i) for i in range(420)]
+        names.extend(['deepwalk_{}'.format(i) for i in range(64)])
         f.write('\t'.join(names)+'\n')
         for node in node_feats.keys():
             datas = []
