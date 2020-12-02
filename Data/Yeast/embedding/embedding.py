@@ -382,7 +382,7 @@ def deepwalk(nodes, edges):
     while True:
         if not os.path.exists("deepwalk/res"):
             continue
-        os.wait(3000)
+        time.sleep(3000)
         with open("deepwalk/res", 'r')as f:
             next(f)
             res = {}
