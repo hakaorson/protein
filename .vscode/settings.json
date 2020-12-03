@@ -3,4 +3,5 @@
     "python.linting.pylintEnabled": false,
     "python.terminal.activateEnvironment": true,
     "python.formatting.provider": "autopep8",
+    "python.pythonPath": "D:\\software\\Anaconda\\python.exe",
 }

@@ -7,3 +7,4 @@ Data/Yeast/embedding/deepwalk
 **/**.png
 **/__pycache__
 Data/Yeast/compare
+.vscode/

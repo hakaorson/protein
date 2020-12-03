@@ -1,4 +1,3 @@
-import pandas as pd
 import math
 import sys
 import re
@@ -36,7 +35,7 @@ def read_edges(graph_path):
     nodes, edges = list(), list()
     with open(graph_path) as f:
         for line in f:
-            linelist = tuple(line.strip().split('\t'))
+            linelist = tuple(line.strip().split(' '))
             edges.append(linelist)
             for singleid in linelist[:2]:
                 nodes.append(singleid)
@@ -399,6 +398,7 @@ def deepwalk(nodes, edges):
 def compute_node_feats(nodes, edges, nodedatas):
     blast_map = read_mapping("blast/POSSUM_DATA")
     deepwalkres = deepwalk(nodes, edges)
+    # randomGCN = randomgcn(nodes, edges)
     res = {}
     for node in nodes:
         tempEmb = {}
@@ -418,11 +418,10 @@ if __name__ == "__main__":
     node_feats = compute_node_feats(nodes, edges, uniprotkb_datas)
     edge_feats = compute_edge_feats(edges, uniprotkb_datas)
 
-
     dip_node_path = 'dip_node'
     dip_edge_path = 'dip_edge'
     dip_edge_path_nofeat = 'dip_edge_nofeat'
-    with open(dip_edge_path, 'w') as f, open(dip_edge_path_nofeat, 'w')as fnofeat:
+    with open(dip_edge_path, 'w') as f, open(dip_edge_path_nofeat, 'w') as fnofeat:
         names = ['edges_id', 'domain_same', 'domain_direct_link', 'domain_direct_link_weight',
                  'domain_skip_neibor', 'subcell_and', 'subcell_or', 'go_wang', 'go_lin']
         f.write('\t'.join(names)+'\n')

@@ -17,18 +17,23 @@ def read_datas(node_path, edge_path):
     edges, edgematrix = [], []
 
     with open(node_path, 'r') as f:
-        next(f)
+        nodefeat_names = next(f).strip().split('\t')
+        index_deepwalk = []
+        for index, name in enumerate(nodefeat_names):
+            if "deepwalk" in name:
+                index_deepwalk.append(index)
         for nodedata in f:
-            nodedata_splited = nodedata.split('\t')
+            nodedata_splited = nodedata.strip().split('\t')
             node_id = nodedata_splited[0]
             node_feat = list(map(float, nodedata_splited[1:]))
             nodes.append(node_id)
-            nodematrix.append(node_feat)
+            nodematrix.append(
+                node_feat[min(index_deepwalk):max(index_deepwalk)+1])
 
     with open(edge_path, 'r')as f:
         next(f)
         for edgedata in f:
-            edgedata_splited = edgedata.split('\t')
+            edgedata_splited = edgedata.strip().split('\t')
             v0, v1 = edgedata_splited[0].split(' ')
             edge_feat = list(map(float, edgedata_splited[1:]))
             edges.append([v0, v1])
@@ -41,20 +46,6 @@ def dataprocess(matrix):
     matrix = np.array(matrix)
     matrix = preprocessing.normalize(matrix, axis=0)
     return matrix
-
-
-def get_graph(nodes, nodematrix, edges, edgematrix, direct):  # 永远当成有向图处理，无向图也需要转为有向图
-    nx_graph = nx.DiGraph()
-    for index, item in enumerate(nodematrix):
-        nx_graph.add_node(nodes[index], w=item)
-    if direct:
-        for index, item in enumerate(edgematrix):
-            nx_graph.add_edge(edges[index][0], edges[index][1], w=item)
-    else:
-        for index, item in enumerate(edgematrix):  # 无向图可以这么处理，重复
-            nx_graph.add_edge(edges[index][0], edges[index][1], w=item)
-            nx_graph.add_edge(edges[index][1], edges[index][0], w=item)
-    return nx_graph
 
 
 def subgraphs(complexes, graph):
@@ -252,6 +243,25 @@ class single_data:
         return list(result)
 
 
+def get_global_nxgraph(node_path, edge_path, direct):
+    # 获取图数据
+    nodes, nodematrix, edges, edgematrix = read_datas(node_path, edge_path)
+    # 归一化处理
+    # nodematrix = dataprocess(nodematrix)
+    edgematrix = dataprocess(edgematrix)
+    nx_graph = nx.DiGraph()
+    for index, item in enumerate(nodematrix):
+        nx_graph.add_node(nodes[index], w=item)
+    if direct:
+        for index, item in enumerate(edgematrix):
+            nx_graph.add_edge(edges[index][0], edges[index][1], w=item)
+    else:
+        for index, item in enumerate(edgematrix):  # 无向图可以这么处理，重复
+            nx_graph.add_edge(edges[index][0], edges[index][1], w=item)
+            nx_graph.add_edge(edges[index][1], edges[index][0], w=item)
+    return nx_graph
+
+
 def first_stage(node_path, edge_path, postive_path, middle_path, save_path, reload=True, direct=False):
     if not reload and os.path.exists(save_path):
         with open(save_path, 'rb')as f:
@@ -260,13 +270,7 @@ def first_stage(node_path, edge_path, postive_path, middle_path, save_path, relo
     '''
     下面是读取点数据，和边数据，并做特征初始化处理
     '''
-    # 获取图数据
-    nodes, nodematrix, edges, edgematrix = read_datas(
-        node_path, edge_path)  # TODO 做特征选择
-    # 归一化处理
-    nodematrix = dataprocess(nodematrix)
-    edgematrix = dataprocess(edgematrix)
-    nx_graph = get_graph(nodes, nodematrix, edges, edgematrix, direct)
+    nx_graph = get_global_nxgraph(node_path, edge_path, direct)
     # dgl_graph = single_data(nx_graph, direct).graph
     bench_data = read_bench(postive_path)
     middle_data = read_bench(middle_path)
@@ -315,12 +319,7 @@ def second_stage(node_path, edge_path, candi_data, save_path, reload=True, direc
         with open(save_path, 'rb')as f:
             result = pickle.load(f)
         return result
-    # 获取图数据
-    nodes, nodematrix, edges, edgematrix = read_datas(node_path, edge_path)
-    # 归一化处理
-    nodematrix = dataprocess(nodematrix)
-    edgematrix = dataprocess(edgematrix)
-    nx_graph = get_graph(nodes, nodematrix, edges, edgematrix, direct)
+    nx_graph = get_global_nxgraph(node_path, edge_path, direct)
     # datasets = [get_singlegraph(nx_graph, item, direct, -1)
     #             for item in candi_data]  # -1代表无意义
     # TODO 注意那就不需要考虑不连通的情况，因为这是在我给定的图里面获取的

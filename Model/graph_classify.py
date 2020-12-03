@@ -105,8 +105,8 @@ class GCNPredict(nn.Module):
         self.weight = nn.Linear(featsize*(layersize+1), featsize, bias=True)
 
     def forward(self, dgl_data):
-        dgl_predict = torch.mean(dgl_data.ndata['stack'], 0).reshape(1, -1)
-        dgl_predict = self.weight(dgl_predict)
+        dgl_mean = torch.mean(dgl_data.ndata['stack'], 0).reshape(1, -1)
+        dgl_predict = self.weight(dgl_mean)
         return dgl_predict
 
 
@@ -120,6 +120,19 @@ class Predictwithbase(nn.Module):
         final_feat = torch.cat([dgl_feat, base_feat], -1)
         result = self.predict(final_feat)
         result = self.soft(result)
+        return result
+
+
+class Predictwithbase_regression(nn.Module):
+    def __init__(self, in_size, hidden_size):
+        super().__init__()
+        self.predict_0 = nn.Linear(in_size, hidden_size)
+        self.predict_1 = nn.Linear(in_size, 1)
+
+    def forward(self, dgl_feat, base_feat):
+        final_feat = torch.cat([dgl_feat, base_feat], -1)
+        result = self.predict_0(final_feat)
+        result = self.predict_0(result)
         return result
 
 
@@ -222,6 +235,29 @@ class GCNBASEModel(nn.Module):
         self.predictwithbase = Predictwithbase(hidden_size*2, classnum)
         self.predictGCN = PredictOnlyGCN(hidden_size, classnum)
         self.predictBase = PredictOnlyBase(hidden_size, classnum)
+        self.edge2node_feat = Node_feat_fusion()
+
+    def forward(self, dgl_data, base_data):
+        base_feat = self.graph_feat_init(base_data)
+        dgl_digit = self.nodeedge_feat_init(dgl_data)
+        dgl_digit = self.edge2node_feat(dgl_digit)
+        dgl_digit = self.gcn_process(dgl_digit)
+        dgl_feat = self.gcn_predict(dgl_digit)
+        predict = self.predictwithbase(dgl_feat, base_feat)
+        return predict
+
+
+class GCNwithBASEModel_regression(nn.Module):
+    def __init__(self, nodefeatsize, edgefeatsize, graphfeatsize, hidden_size, gcn_layers):
+        super().__init__()
+        self.name = "gcnbasereg"
+        self.nodeedge_feat_init = DGLInit(
+            nodefeatsize, edgefeatsize, hidden_size)
+        self.graph_feat_init = nn.Linear(graphfeatsize, hidden_size)
+        self.gcn_process = GCNProcess(hidden_size, gcn_layers)
+        self.gcn_predict = GCNPredict(hidden_size, gcn_layers)
+        self.predictwithbase = Predictwithbase_regression(
+            hidden_size*2, hidden_size)
         self.edge2node_feat = Node_feat_fusion()
 
     def forward(self, dgl_data, base_data):
